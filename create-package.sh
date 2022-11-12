@@ -1,6 +1,8 @@
 #!/bin/bash
 # Author: TheElectronWill
+# Contributor: Bilal2453 (added OpenAsar support)
 # This script downloads the latest version of Discord for linux, and creates a package with rpmbuild.
+# Optionally installing OpenAsar (https://github.com/GooseMod/OpenAsar/).
 
 source terminal-colors.sh # Adds color variables
 source common-functions.sh # Adds utilities functions
@@ -12,16 +14,19 @@ downloaded_dir="$work_dir/discord"
 desktop_model="$PWD/discord.desktop"
 spec_file="$PWD/discord.spec"
 arch='x86_64'
+openasar_url="https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"
+asar_filename="app.asar"
+openasar_file="$work_dir/$asar_filename"
 
 # Settings according to the distribution
 if [[ $distrib == "redhat" ]]; then
-	pkg_req='libatomic%{?_isa}, glibc%{?_isa}, alsa-lib%{?_isa}, GConf2%{?_isa}, libnotify%{?_isa}, nspr%{?_isa} >= 4.13, nss%{?_isa} >= 3.27, libstdc++%{?_isa}, libX11%{?_isa} >= 1.6, libXtst%{?_isa} >= 1.2, libappindicator-gtk3%{?_isa}, libXScrnSaver%{?_isa}'
+	pkg_req='libatomic%{?_isa}, glibc%{?_isa}, alsa-lib%{?_isa}, GConf2%{?_isa}, libnotify%{?_isa}, nspr%{?_isa} >= 4.13, nss%{?_isa} >= 3.27, libstdc++%{?_isa}, libX11%{?_isa} >= 1.6, libXtst%{?_isa} >= 1.2, libappindicator%{?_isa}, libcxx%{?_isa}, libXScrnSaver%{?_isa}'
 elif [[ $distrib == "suse" ]]; then
 	pkg_req='libatomic1, glibc, alsa, gconf2, libnotify, mozilla-nspr >= 4.13, mozilla-nss >= 3.27, libstdc++6, libX11 >= 1.6, libXtst >= 1.2, libappindicator, libc++1, libXScrnSaver'
 else
 	disp "${red}Sorry, your distribution isn't supported (yet).$reset"
 	exit 1
-fi	
+fi
 
 # Checks that the version (stable/ptb/canary) is given as a parameter.
 if [[ $# -ne 1 || $1 != "stable" && $1 != "ptb" && $1 != "canary" && $1 != "development" ]]; then
@@ -61,6 +66,15 @@ else
 	desktop_file="$work_dir/discord.desktop"
 fi
 
+download_openasar() {
+  echo "Downloading OpenAsar..."
+  wget --content-disposition $wget_progress $openasar_url
+}
+
+get_openasar_version() {
+  version="$(cat $openasar_file | sed -n "s/^.*global.oaVersion='\(\S*\?\)';.*$/\1/p")"
+}
+
 # Downloads the discord tar.gz archive and puts its name in the global variable archive_name.
 download_discord() {
 	echo "Downloading $app_name for linux..."
@@ -94,6 +108,42 @@ echo
 mkdir -p "$downloaded_dir"
 extract "$archive_name" "$downloaded_dir" "--strip 1" # --strip 1 gets rid of the top archive's directory
 
+ask_yesno 'Do you want to install OpenAsar?'
+if [[ $answer = y* || $answer = Y* ]]; then
+    if [ -e "$openasar_file" ]; then
+      get_openasar_version
+      echo "Found a previous download of OpenAsar with the version $version."
+
+      ask_yesno 'Use existing OpenAsar?'
+      if [[ $answer = y* || $answer = Y* ]]; then
+        echo "Existing OpenAsar selected."
+      else
+        rm $openasar_file
+        download_openasar
+      fi
+    else
+      download_openasar
+    fi
+    
+    if [ ! -e "$openasar_file" ]; then
+      disp "${red}Could not find $openasar_file! Quitting.$reset"
+      exit 1
+    fi
+    
+    get_openasar_version
+    echo "Installing OpenAsar $version..."
+    
+    
+    mv "$downloaded_dir/resources/$asar_filename" "$downloaded_dir/resources/$asar_filename.backup"
+    cp -f $openasar_file "$downloaded_dir/resources/$asar_filename"
+    if [ ! $? -eq 0 ]; then
+      disp "${red}Could not copy $openasar_file into the resources folder! Quitting.$reset"
+      mv "$downloaded_dir/resources/$asar_filename.backup" "$downloaded_dir/resources/$asar_filename"
+      exit 1
+    fi
+    
+    disp "${bgreen}Done installing OpenAsar."
+fi
 
 # Gets Discord's version number + icon file name
 echo 'Analysing the files...'
@@ -123,5 +173,8 @@ disp "${bgreen}Done!${reset_font}"
 disp "The RPM package is located in the \"RPMs/$arch\" directory."
 disp '----------------'
 
-ask_remove_dir "$work_dir"
 ask_installpkg
+ask_install_openasar
+ask_remove_dir "$work_dir"
+ask_remove_dir "$rpm_dir"
+
