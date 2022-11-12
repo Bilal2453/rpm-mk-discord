@@ -1,5 +1,9 @@
 ![discord logo](discord-logo-wordmark.png)
 
+# The Fork
+
+A little fork of the original RPM-Outpost/discord, which makes installing [OpenAsar](https://github.com/GooseMod/OpenAsar) a little bit easier, and possibly also integrating any future mods I may use for Discord.
+
 # Discord rpm
 Unofficial RPM package for Discord.
 
